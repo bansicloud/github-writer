@@ -4,9 +4,13 @@
  */
 
 const GitHubBrowser = require( './githubbrowser' );
+const Editor = require( './editor' );
+
 const { repo, credentials } = require( '../config.json' ).github;
 
 const htmlToJson = require( 'html-to-json' );
+
+const urlResolvers = [];
 
 class GitHubPage {
 	/**
@@ -37,8 +41,62 @@ class GitHubPage {
 		await browserPage.goto( this.url );
 	}
 
+	/**
+	 * @param id {String}
+	 * @returns {Editor}
+	 */
+	async getEditorById( id ) {
+		return new Editor( this, id );
+	}
+
+	/**
+	 * @param selector {String|ElementHandle}
+	 * @param EditorClass {Function}
+	 * @returns {Editor}
+	 */
+	async getEditorByRoot( selector, EditorClass = Editor ) {
+		const root = ( typeof selector === 'string' ) ? await this.browserPage.$( selector ) : selector;
+
+		if ( !root ) {
+			throw new Error( `No root element found for the selector \`${ selector }\`.` );
+		}
+
+		const id = await root.evaluate( root => root.getAttribute( 'data-github-writer-id' ) );
+
+		if ( !id ) {
+			throw new Error( `No editor found for the root \`${ selector }\`.` );
+		}
+
+		return new EditorClass( this, id );
+	}
+
+	async waitForNavigation( ...otherPromises ) {
+		const [ response ] = await Promise.all( [
+			this.browserPage.waitForNavigation(),
+			...otherPromises
+		] );
+
+		if ( response && !response.ok() ) {
+			return Promise.reject( new Error( `Server response error: (${ response.status() }) ${ response.statusText() }` ) );
+		}
+	}
+
+	/**
+	 * @param selector {String}
+	 * @returns {Promise<Boolean>}
+	 */
 	async hasElement( selector ) {
 		return !!( await this.browserPage.$( selector ) );
+	}
+
+	/**
+	 * @param element {ElementHandle}
+	 * @return {Promise<void>}
+	 */
+	async waitVisible( element ) {
+		await this.browserPage.waitForFunction( element => {
+			return ( element.offsetParent !== null );
+		}, {}, element );
 	}
 
 	/**
@@ -121,6 +179,42 @@ class GitHubPage {
 		return page;
 	}
 
+	/**
+	 * @return {Promise<GitHubPage>}
+	 */
+	static async getCurrentPage() {
+		const browserPage = await GitHubBrowser.getPage();
+		const url = await browserPage.url();
+		let page;
+
+		for ( let i = 0; i < urlResolvers.length; i++ ) {
+			page = urlResolvers[ i ]( url );
+
+			if ( page ) {
+				break;
+			}
+		}
+
+		if ( !page ) {
+			page = new GitHubPage( url );
+		}
+
+		page.browserPage = browserPage;
+
+		return page;
+	}
+
+	/**
+	 * @param callback {Function}
+	 */
+	static addUrlResolver( callback ) {
+		urlResolvers.push( callback );
+	}
+
+	/**
+	 * @param path {String}
+	 * @returns {String}
+	 */
 	static getGitHubUrl( path ) {
 		let url = path;
 		if ( path.startsWith( '/' ) ) {

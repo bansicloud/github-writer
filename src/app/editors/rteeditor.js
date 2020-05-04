@@ -77,6 +77,8 @@ export default class RteEditor {
 		// Returns the promise that follows the creation of the internal CKEditor instance.
 		return ( this._creationPromise = CKEditorGitHubEditor.create( initialData || '', RteEditorConfig.get( this ) )
 			.then( editor => {
+				editor.id = this.githubEditor.id;
+
 				this.injectToolbar( editor.ui.view.toolbar.element );
 
 				// Inject the editable in the DOM within the appropriate DOM structure around it.

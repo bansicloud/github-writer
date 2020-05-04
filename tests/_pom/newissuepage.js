@@ -4,15 +4,27 @@
  */
 
 const GitHubPage = require( './githubpage' );
+const Editor = require( './editor' );
 
 class NewIssuePage extends GitHubPage {
 	constructor() {
 		super( 'issues/new' );
 	}
 
+	/**
+	 * @param title {String}
+	 * @return {Promise<void>}
+	 */
 	async setTitle( title ) {
 		const page = this.browserPage;
 		await page.type( '[name="issue[title]"]', title );
+	}
+
+	/**
+	 * @returns {Promise<MainEditor>}
+	 */
+	async getMainEditor() {
+		return await this.getEditorByRoot( '#new_issue', MainEditor );
 	}
 
 	/**
@@ -24,3 +36,10 @@ class NewIssuePage extends GitHubPage {
 }
 
 module.exports = NewIssuePage;
+
+class MainEditor extends Editor {
+	async submit() {
+		await this.page.waitForNavigation( super.submit() );
+		return await GitHubPage.getCurrentPage();
+	}
+}
